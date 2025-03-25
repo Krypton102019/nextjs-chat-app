@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: "export", // Enables static export
+    // Remove output: "export" since Vercel supports dynamic apps
     images: {
-        unoptimized: true, // Disables image optimization (not supported in static exports)
+        unoptimized: true, // Optional: Keep this if you don’t need image optimization
     },
 };
 
