@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
     console.log("Received POST request to /api/generate-message");
 
-    const apiKey = "REDACTED_API_KEY";
+    const apiKey = process.env.OPENAI_API_KEY; // Read from environment variable
     if (!apiKey) {
         return NextResponse.json(
             { error: "OpenAI API key not configured" },
@@ -53,8 +53,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: generatedMessage }, { status: 200 });
     } catch (error) {
         console.error("Error in /api/generate-message:", error);
+        // Safely handle the error type
+        const errorMessage = error instanceof Error ? error.message : "Failed to generate message";
         return NextResponse.json(
-            { error: error.message || "Failed to generate message" },
+            { error: errorMessage },
             { status: 500 }
         );
     }
