@@ -168,8 +168,10 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error("Error in /api/openai:", error);
+        // Safely handle the error type
+        const errorMessage = error instanceof Error ? error.message : "Failed to generate response";
         return NextResponse.json(
-            { error: error.message || "Failed to generate response" },
+            { error: errorMessage },
             { status: 500 }
         );
     }
