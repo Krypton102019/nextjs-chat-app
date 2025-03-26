@@ -1,10 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'export',
+    // Remove output: "export" if present
     images: {
-        unoptimized: true, // Required for images to work
+        unoptimized: true, // Optional: Keep this if you don’t need image optimization
     },
-    basePath: "/nextjs-chat-app", // Use your GitHub repo name
 };
 
 module.exports = nextConfig;
