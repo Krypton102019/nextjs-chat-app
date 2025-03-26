@@ -5,15 +5,14 @@ import { useState } from "react";
 
 interface Message {
   text: string;
-  sender: "user" | "ai" | "family";
-  sentiment?: string;
-  suggestions?: string[];
+  sender: "user" | "ai";
+  suggestions?: { happy: string; caring: string; playful: string };
 }
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
 
-  const handleSendMessage = async (message: string): Promise<{ sentiment: string; suggestions: string[]; exampleMessage: string }> => {
+  const handleSendMessage = async (message: string): Promise<{ suggestions: { happy: string; caring: string; playful: string } }> => {
     try {
       const response = await fetch("/api/openai", {
         method: "POST",
@@ -35,22 +34,20 @@ export default function Home() {
         throw new Error(data.error);
       }
 
-      if (!data.exampleMessage) {
-        throw new Error("No exampleMessage in response");
+      if (!data.suggestions || !data.suggestions.happy || !data.suggestions.caring || !data.suggestions.playful) {
+        throw new Error("Invalid suggestions format in response");
       }
 
       return {
-        sentiment: data.sentiment || "neutral",
-        suggestions: data.suggestions || [],
-        exampleMessage: data.exampleMessage,
+        suggestions: {
+          happy: data.suggestions.happy,
+          caring: data.suggestions.caring,
+          playful: data.suggestions.playful,
+        },
       };
     } catch (error) {
       console.error("Error with OpenAI API:", error);
-      setMessages((prev: Message[]) => [
-        ...prev,
-        { text: "Sorry, I couldn't respond. Try again!", sender: "ai" },
-      ]);
-      throw error;
+      throw error; // Let Chat.tsx handle the error
     }
   };
 
