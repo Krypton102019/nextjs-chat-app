@@ -6,13 +6,23 @@ import { useState } from "react";
 interface Message {
   text: string;
   sender: "user" | "ai";
-  suggestions?: { happy: string; caring: string; playful: string };
+  slangInfo?: {
+    slang_term: string;
+    definition: string;
+    part_of_speech: string;
+    example: string;
+  };
 }
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
 
-  const handleSendMessage = async (message: string): Promise<{ suggestions: { happy: string; caring: string; playful: string } }> => {
+  const handleSendMessage = async (message: string): Promise<{
+    slang_term: string;
+    definition: string;
+    part_of_speech: string;
+    example: string;
+  }> => {
     try {
       const response = await fetch("/api/openai", {
         method: "POST",
@@ -34,16 +44,15 @@ export default function Home() {
         throw new Error(data.error);
       }
 
-      if (!data.suggestions || !data.suggestions.happy || !data.suggestions.caring || !data.suggestions.playful) {
-        throw new Error("Invalid suggestions format in response");
+      if (!data.slang_term || !data.definition || !data.part_of_speech || !data.example) {
+        throw new Error("Invalid slang term info format in response");
       }
 
       return {
-        suggestions: {
-          happy: data.suggestions.happy,
-          caring: data.suggestions.caring,
-          playful: data.suggestions.playful,
-        },
+        slang_term: data.slang_term,
+        definition: data.definition,
+        part_of_speech: data.part_of_speech,
+        example: data.example,
       };
     } catch (error) {
       console.error("Error with OpenAI API:", error);
