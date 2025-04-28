@@ -6,22 +6,13 @@ import { useState } from "react";
 interface Message {
   text: string;
   sender: "user" | "ai";
-  slangInfo?: {
-    slang_term: string;
-    definition: string;
-    part_of_speech: string;
-    example: string;
-  };
 }
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
 
   const handleSendMessage = async (message: string): Promise<{
-    slang_term: string;
-    definition: string;
-    part_of_speech: string;
-    example: string;
+    translated_message: string;
   }> => {
     try {
       const response = await fetch("/api/openai", {
@@ -44,15 +35,12 @@ export default function Home() {
         throw new Error(data.error);
       }
 
-      if (!data.slang_term || !data.definition || !data.part_of_speech || !data.example) {
-        throw new Error("Invalid slang term info format in response");
+      if (!data.translated_message) {
+        throw new Error("Invalid translation info format in response");
       }
 
       return {
-        slang_term: data.slang_term,
-        definition: data.definition,
-        part_of_speech: data.part_of_speech,
-        example: data.example,
+        translated_message: data.translated_message,
       };
     } catch (error) {
       console.error("Error with OpenAI API:", error);

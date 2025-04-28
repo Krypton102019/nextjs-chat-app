@@ -2,28 +2,53 @@
   "slang_terms": [
     {
       "term": "skibidi",
-      "definition": "A term popularized by internet culture, often used to describe something chaotic, absurd, or nonsensical, typically in a humorous context.",
+      "simple_translation": "chaotic",
       "part_of_speech": "adjective"
     },
     {
       "term": "rizz",
-      "definition": "Short for charisma, used to describe someone’s ability to charm or flirt effectively.",
+      "simple_translation": "charisma",
       "part_of_speech": "noun"
     },
     {
       "term": "yeet",
-      "definition": "To throw something with force, often used to express excitement or enthusiasm.",
+      "simple_translation": "throw",
       "part_of_speech": "verb"
     },
     {
       "term": "bussin",
-      "definition": "Describes something that is really good, especially food or an experience.",
+      "simple_translation": "really good",
       "part_of_speech": "adjective"
     },
     {
       "term": "lit",
-      "definition": "Describes something exciting, fun, or energetic, often used to describe a party or event.",
+      "simple_translation": "exciting",
       "part_of_speech": "adjective"
+    },
+    {
+      "term": "cray cray",
+      "simple_translation": "crazy",
+      "part_of_speech": "adjective"
+    },
+    {
+      "term": "crossfaded",
+      "simple_translation": "drunk and high at the same time",
+      "part_of_speech": "adjective"
+    },
+    {
+      "term": "no cap",
+      "simple_translation": "I'm not lying",
+      "part_of_speech": "phrase"
+    },
+    {
+      "term": "cap",
+      "simple_translation": "lie",
+      "part_of_speech": "noun"
+    },
+    {
+      "term": "bet",
+      "simple_translation": "okay",
+      "part_of_speech": "interjection"
     }
   ]
 }

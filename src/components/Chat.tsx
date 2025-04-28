@@ -5,20 +5,11 @@ import { useState } from "react";
 interface Message {
   text: string;
   sender: "user" | "ai";
-  slangInfo?: {
-    slang_term: string;
-    definition: string;
-    part_of_speech: string;
-    example: string;
-  };
 }
 
 interface ChatProps {
   onSendMessage: (message: string) => Promise<{
-    slang_term: string;
-    definition: string;
-    part_of_speech: string;
-    example: string;
+    translated_message: string;
   }>;
 }
 
@@ -30,39 +21,33 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage }) => {
   const handleSend = async () => {
     if (!message.trim()) return;
 
-    // Add the user's slang term to the chat
+    // Add the user's message to the chat
     const userMessage: Message = { text: message, sender: "user" };
     setMessages((prev) => [...prev, userMessage]);
     setMessage(""); // Clear the input field
 
-    // Call the API to get slang term info
+    // Call the API to get the translated message
     try {
       const response = await onSendMessage(message);
-      const { slang_term, definition, part_of_speech, example } = response;
+      const { translated_message } = response;
 
-      // Add the slang term info to the chat
-      const slangMessage: Message = {
-        text: `Here's the info for "${slang_term}":`,
+      // Add the translated message to the chat
+      const translationMessage: Message = {
+        text: translated_message,
         sender: "ai",
-        slangInfo: {
-          slang_term,
-          definition,
-          part_of_speech,
-          example,
-        },
       };
-      setMessages((prev) => [...prev, slangMessage]);
+      setMessages((prev) => [...prev, translationMessage]);
       setError(null);
     } catch (error) {
-      console.error("Failed to fetch slang info:", error);
-      setError("Sorry, I couldn't fetch the slang term info. Try another term!");
+      console.error("Failed to fetch translation:", error);
+      setError("Sorry, I couldn't translate the message. Try again!");
     }
   };
 
   return (
       <div className="flex flex-col h-screen bg-gray-100 max-w-md mx-auto">
         <div className="bg-green-500 text-white p-4 text-center">
-          <h1 className="text-lg font-bold">Slang Translator AI</h1>
+          <h1 className="text-lg font-bold">Gen Z to Gen X/Y Translator AI</h1>
         </div>
         <div className="flex-1 p-4 overflow-y-auto">
           {messages.map((msg, index) => (
@@ -77,24 +62,7 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage }) => {
                         msg.sender === "user" ? "bg-white text-black" : "bg-blue-200 text-black"
                     }`}
                 >
-                  {msg.sender === "ai" && msg.slangInfo ? (
-                      <div>
-                        <strong>{msg.text}</strong>
-                        <ul className="mt-2">
-                          <li>
-                            <strong>Definition:</strong> {msg.slangInfo.definition}
-                          </li>
-                          <li>
-                            <strong>Part of Speech:</strong> {msg.slangInfo.part_of_speech}
-                          </li>
-                          <li>
-                            <strong>Example:</strong> {msg.slangInfo.example}
-                          </li>
-                        </ul>
-                      </div>
-                  ) : (
-                      msg.text
-                  )}
+                  {msg.text}
                 </div>
               </div>
           ))}
@@ -111,7 +79,7 @@ const Chat: React.FC<ChatProps> = ({ onSendMessage }) => {
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="E.g., 'skibidi'"
+              placeholder="E.g., 'I’ve been so busy this week, it’s cray cray!'"
               className="flex-1 p-3 rounded-2xl border border-gray-300 focus:outline-none text-sm"
               onKeyPress={(e) => e.key === "Enter" && handleSend()}
           />

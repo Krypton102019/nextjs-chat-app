@@ -1,25 +1,125 @@
 import { NextResponse } from "next/server";
 import slangKnowledgeBase from "@/data/slang_knowledge_base.json"; // Import the slang knowledge base
 
-// Helper function to find the slang term in the knowledge base
-function retrieveSlangInfo(slangTerm: string): { definition: string; part_of_speech: string } | null {
-    const lowerCaseTerm = slangTerm.toLowerCase().trim();
-    const matchedTerm = slangKnowledgeBase.slang_terms.find(
-        (entry) => entry.term.toLowerCase() === lowerCaseTerm
-    );
+// Helper function to find slang terms in the message and retrieve or generate their translations
+async function retrieveSlangTranslations(
+    message: string,
+    apiKey: string
+): Promise<{ term: string; simple_translation: string; part_of_speech: string }[]> {
+    const foundSlang: { term: string; simple_translation: string; part_of_speech: string }[] = [];
+    const lowerCaseMessage = message.toLowerCase();
 
-    if (matchedTerm) {
-        return {
-            definition: matchedTerm.definition,
-            part_of_speech: matchedTerm.part_of_speech,
-        };
+    // Step 1: Check the knowledge base for slang terms
+    const knownSlang: { term: string; simple_translation: string; part_of_speech: string }[] = [];
+    const potentialSlang: string[] = [];
+
+    // Split the message into words and phrases to identify potential slang
+    const words = message.split(/\s+/);
+    words.forEach((word) => {
+        const cleanedWord = word.replace(/[^a-zA-Z]/g, "").toLowerCase(); // Remove punctuation
+        const matchedTerm = slangKnowledgeBase.slang_terms.find(
+            (entry) => entry.term.toLowerCase() === cleanedWord
+        );
+
+        if (matchedTerm) {
+            knownSlang.push({
+                term: matchedTerm.term,
+                simple_translation: matchedTerm.simple_translation,
+                part_of_speech: matchedTerm.part_of_speech,
+            });
+        } else if (cleanedWord.length > 2 && !["and", "the", "is", "to", "in", "it", "for", "on", "at", "with", "of", "been", "this", "that"].includes(cleanedWord)) {
+            // Heuristic: Consider words longer than 2 characters and not common stop words as potential slang
+            potentialSlang.push(cleanedWord);
+        }
+    });
+
+    // Check for multi-word phrases in the knowledge base
+    slangKnowledgeBase.slang_terms.forEach((entry) => {
+        if (lowerCaseMessage.includes(entry.term.toLowerCase()) && !knownSlang.some((s) => s.term === entry.term)) {
+            knownSlang.push({
+                term: entry.term,
+                simple_translation: entry.simple_translation,
+                part_of_speech: entry.part_of_speech,
+            });
+        }
+    });
+
+    foundSlang.push(...knownSlang);
+
+    // Step 2: For potential slang not in the knowledge base, use OpenAI API to generate translations
+    if (potentialSlang.length > 0) {
+        console.log("Potential slang terms not in knowledge base:", potentialSlang);
+
+        const slangPrompt = `
+        The user has provided a message that may contain Gen Z slang terms: "${message}".
+        The following words are potential slang terms that are not in the predefined knowledge base: ${potentialSlang.join(", ")}.
+        For each of these terms, determine if it is a slang term commonly used by Gen Z as of April 2025. If it is:
+        1. Provide a simple translation that someone from Gen X or Gen Y (born between 1965 and 1996) would understand.
+        2. Identify its part of speech (e.g., noun, verb, adjective, phrase, interjection).
+        If a term is not a recognizable slang term, indicate that it is not slang.
+        Return the results as a JSON object where each key is a potential slang term, and the value is an object with 'is_slang' (boolean), 'simple_translation' (string, or empty if not slang), and 'part_of_speech' (string, or empty if not slang).
+        Example:
+        {
+            "slay": { "is_slang": true, "simple_translation": "do great", "part_of_speech": "verb" },
+            "hello": { "is_slang": false, "simple_translation": "", "part_of_speech": "" }
+        }
+        `;
+
+        const slangResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [
+                    { role: "system", content: slangPrompt },
+                    { role: "user", content: message },
+                ],
+                temperature: 0.7,
+            }),
+        });
+
+        const slangData = await slangResponse.json();
+        if (!slangResponse.ok) {
+            const errorMsg = slangData.error?.message || "Failed to identify slang terms";
+            console.error("Slang identification error:", {
+                status: slangResponse.status,
+                statusText: slangResponse.statusText,
+                errorMsg,
+                responseData: slangData,
+            });
+            throw new Error(errorMsg);
+        }
+
+        let slangResults;
+        try {
+            slangResults = JSON.parse(slangData.choices[0].message.content.trim());
+        } catch (parseError) {
+            console.error("Error parsing slang results:", parseError);
+            slangResults = {};
+        }
+
+        // Add identified slang terms to the foundSlang list
+        potentialSlang.forEach((term) => {
+            const result = slangResults[term];
+            if (result && result.is_slang) {
+                foundSlang.push({
+                    term: term,
+                    simple_translation: result.simple_translation,
+                    part_of_speech: result.part_of_speech,
+                });
+            }
+        });
     }
-    return null; // Return null if no match is found
+
+    return foundSlang;
 }
 
 export async function POST(request: Request) {
     const { message } = await request.json();
-    console.log("Received prompt in /api/openai:", message);
+    console.log("Received message in /api/openai:", message);
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -30,97 +130,34 @@ export async function POST(request: Request) {
     }
 
     try {
-        // The message is the slang term (e.g., "skibidi")
-        const slangTerm = message.trim();
-        console.log("Extracted slang term:", slangTerm);
+        // The message is the user's input (e.g., "I’ve been so busy this week, it’s cray cray!")
+        const userMessage = message.trim();
+        console.log("User message:", userMessage);
 
-        // Retrieve the slang term's definition and part of speech from the knowledge base
-        let slangInfo = retrieveSlangInfo(slangTerm);
-        console.log("Retrieved slang info from knowledge base:", slangInfo);
+        // Retrieve slang terms and their translations (from knowledge base or OpenAI API)
+        const slangTranslations = await retrieveSlangTranslations(userMessage, apiKey);
+        console.log("Retrieved slang translations:", slangTranslations);
 
-        let definition: string;
-        let partOfSpeech: string;
-        let exampleSentence: string;
+        let translatedMessage: string;
 
-        if (!slangInfo) {
-            // Fallback: Use OpenAI API to generate the definition and part of speech
-            console.log(`Slang term "${slangTerm}" not found in knowledge base. Using OpenAI API as fallback...`);
-            const fallbackPrompt = `
-            The user has provided the slang term "${slangTerm}".
-            Since this term is not in the predefined knowledge base, provide the following:
-            1. A definition of the slang term "${slangTerm}" based on its modern usage in informal contexts, such as on social media (e.g., TikTok, Instagram, X) or in Gen Z/Gen Alpha culture.
-            2. The part of speech for the slang term (e.g., noun, verb, adjective).
-            3. A natural, casual example sentence using the slang term "${slangTerm}" in a way that matches its definition and part of speech.
-            The definition should reflect the term's current usage as of April 2025, considering its origins (e.g., African American Vernacular English, internet culture) if applicable.
-            The example sentence should feel conversational and appropriate for a modern, informal context.
-            Return the response as a JSON object with keys 'definition', 'part_of_speech', and 'example'.
-            If the term is not a recognizable slang term, provide a best-guess definition based on its potential usage or indicate that it may not be a known slang term.
-            `;
-
-            const fallbackResponse = await fetch(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${apiKey}`,
-                    },
-                    body: JSON.stringify({
-                        model: "gpt-3.5-turbo",
-                        messages: [
-                            { role: "system", content: fallbackPrompt },
-                            { role: "user", content: slangTerm },
-                        ],
-                        temperature: 0.7,
-                    }),
-                }
-            );
-
-            const fallbackData = await fallbackResponse.json();
-            if (!fallbackResponse.ok) {
-                const errorMsg = fallbackData.error?.message || "Failed to generate slang info";
-                console.error("Fallback generation error:", {
-                    status: fallbackResponse.status,
-                    statusText: fallbackResponse.statusText,
-                    errorMsg,
-                    responseData: fallbackData,
-                });
-                if (errorMsg.includes("quota")) {
-                    return NextResponse.json(
-                        { error: "OpenAI quota exceeded. Please check your plan and billing details." },
-                        { status: 429 }
-                    );
-                }
-                throw new Error(errorMsg);
-            }
-
-            let fallbackResult;
-            try {
-                fallbackResult = JSON.parse(fallbackData.choices[0].message.content.trim());
-                definition = fallbackResult.definition || `Could not determine a definition for "${slangTerm}".`;
-                partOfSpeech = fallbackResult.part_of_speech || "unknown";
-                exampleSentence = fallbackResult.example || `I couldn't generate an example sentence for "${slangTerm}".`;
-            } catch (parseError) {
-                console.error("Error parsing fallback result:", parseError);
-                definition = `Could not determine a definition for "${slangTerm}".`;
-                partOfSpeech = "unknown";
-                exampleSentence = `I couldn't generate an example sentence for "${slangTerm}".`;
-            }
+        if (slangTranslations.length === 0) {
+            // If no slang terms are found, return the original message
+            translatedMessage = userMessage;
         } else {
-            // Use the knowledge base info and generate an example sentence
-            definition = slangInfo.definition;
-            partOfSpeech = slangInfo.part_of_speech;
+            // Prepare the prompt for OpenAI to rephrase the message
+            let translationPrompt = `
+            The user has provided the following message written in Gen Z slang: "${userMessage}".
+            The message contains the following slang terms and their simple translations:
+            ${slangTranslations.map((entry) => `- "${entry.term}" (a ${entry.part_of_speech}) means "${entry.simple_translation}"`).join("\n")}
 
-            // Generate an example sentence using the slang term
-            const examplePrompt = `
-            The user has provided the slang term "${slangTerm}", which is defined as: "${slangInfo.definition}" and is a ${slangInfo.part_of_speech}.
-            Generate a natural, casual example sentence using the slang term "${slangTerm}" in a way that matches its definition and part of speech.
-            The sentence should feel conversational and appropriate for a modern, informal context.
-            Return the example sentence as a plain string.
+            Your task is to rephrase the entire message into simple, clear language that someone from Gen X or Gen Y (born between 1965 and 1996) would easily understand.
+            Replace each slang term with its simple translation, ensuring the sentence remains natural and grammatically correct.
+            Do not add extra context or explanations beyond rephrasing the message.
+            Return the rephrased message as a plain string.
             `;
 
-            console.log("Calling OpenAI for example sentence...");
-            const exampleResponse = await fetch(
+            console.log("Calling OpenAI for message translation...");
+            const translationResponse = await fetch(
                 "https://api.openai.com/v1/chat/completions",
                 {
                     method: "POST",
@@ -131,22 +168,22 @@ export async function POST(request: Request) {
                     body: JSON.stringify({
                         model: "gpt-3.5-turbo",
                         messages: [
-                            { role: "system", content: examplePrompt },
-                            { role: "user", content: slangTerm },
+                            { role: "system", content: translationPrompt },
+                            { role: "user", content: userMessage },
                         ],
                         temperature: 0.7,
                     }),
                 }
             );
 
-            const exampleData = await exampleResponse.json();
-            if (!exampleResponse.ok) {
-                const errorMsg = exampleData.error?.message || "Failed to generate example sentence";
-                console.error("Example sentence generation error:", {
-                    status: exampleResponse.status,
-                    statusText: exampleResponse.statusText,
+            const translationData = await translationResponse.json();
+            if (!translationResponse.ok) {
+                const errorMsg = translationData.error?.message || "Failed to translate message";
+                console.error("Translation generation error:", {
+                    status: translationResponse.status,
+                    statusText: translationResponse.statusText,
                     errorMsg,
-                    responseData: exampleData,
+                    responseData: translationData,
                 });
                 if (errorMsg.includes("quota")) {
                     return NextResponse.json(
@@ -158,25 +195,22 @@ export async function POST(request: Request) {
             }
 
             try {
-                exampleSentence = exampleData.choices[0].message.content.trim();
+                translatedMessage = translationData.choices[0].message.content.trim();
             } catch (parseError) {
-                console.error("Error parsing example sentence:", parseError);
-                exampleSentence = `I couldn't generate an example sentence for "${slangTerm}".`;
+                console.error("Error parsing translated message:", parseError);
+                translatedMessage = "I couldn't translate the message.";
             }
         }
 
-        console.log("Final response:", { slangTerm, definition, partOfSpeech, exampleSentence });
+        console.log("Translated message:", translatedMessage);
 
-        // Return the slang term info and example sentence
+        // Return only the translated message
         return NextResponse.json({
-            slang_term: slangTerm,
-            definition: definition,
-            part_of_speech: partOfSpeech,
-            example: exampleSentence,
+            translated_message: translatedMessage,
         });
     } catch (error) {
         console.error("Error in /api/openai:", error);
-        const errorMessage = error instanceof Error ? error.message : "Failed to process the slang term";
+        const errorMessage = error instanceof Error ? error.message : "Failed to process the message";
         return NextResponse.json(
             { error: errorMessage },
             { status: 500 }
